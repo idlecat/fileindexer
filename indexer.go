@@ -76,8 +76,8 @@ func (v *Indexer) getDbMeta() *DbMeta {
 	return &meta
 }
 
-// iterates all directories and updates directory if modified.
 func (v *Indexer) Update() error {
+	// Updating dirs and files
 	fmt.Println("updating:" + v.baseDir)
 	fileInfo, err := os.Lstat(v.baseDir)
 	if err != nil {
@@ -85,10 +85,50 @@ func (v *Indexer) Update() error {
 	}
 	v.updateDir(v.baseDir, fileInfo)
 	fmt.Println("updated")
+
+	// Commiting new sequence
 	v.dbMeta.Sequence = v.writingSequence
 	v.readingSequence = v.writingSequence
 	v.writingSequence ++
-	return v.putKeyValue(".", v.dbMeta)
+	v.putKeyValue(".", v.dbMeta)
+
+	// Removing obsoleted dir/file.
+	removedFileCount := 0
+	removedDirCount := 0
+	removedItems := make([]string, 100)
+	v.Iter(func(path string, meta *FileMeta) {
+		if meta.Sequence != v.dbMeta.Sequence {
+			removedItems = append(removedItems, path)
+			if meta.IsDir {
+				removedDirCount ++
+			} else {
+				removedFileCount ++
+			}
+		}
+	})
+	fmt.Println("removed files:", removedFileCount)
+	fmt.Println("removed dirs:", removedDirCount)
+	for _, path := range removedItems {
+		v.db.Delete([]byte(path), nil)
+	}
+	return nil
+}
+
+type IterFunc func(path string, meta *FileMeta)
+
+func (v *Indexer) Iter(iterFunc IterFunc) {
+	iter := v.db.NewIterator(nil, nil)
+	for iter.Next() {
+		key := string(iter.Key())
+		var meta FileMeta
+		err := json.Unmarshal(iter.Value(), &meta)
+		if err != nil {
+			iterFunc(key, nil)
+		} else {
+			iterFunc(key, &meta)
+		}
+	}
+	iter.Release()
 }
 
 func (v *Indexer) updateDir(dir string, info os.FileInfo) (totalFileCount, totalFileSize int64) {
