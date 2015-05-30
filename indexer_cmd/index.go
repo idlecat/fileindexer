@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/idlecat/fileindexer"
+	"github.com/idlecat/fileindexer/protos"
 	"os"
 )
 
@@ -61,7 +62,7 @@ func info() {
 }
 
 func list() {
-	indexer.Iter(func(file string, meta *fileindexer.FileMeta) {
+	indexer.Iter(func(file string, meta *protos.FileMeta) {
 		fmt.Println(file, meta)
 	})
 }

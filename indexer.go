@@ -1,9 +1,10 @@
 package fileindexer
 
 import (
-	"encoding/json"
 	"fmt"
+	"github.com/golang/protobuf/proto"
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/idlecat/fileindexer/protos"
 	"os"
 	"path/filepath"
 	"time"
@@ -14,9 +15,9 @@ type Indexer struct {
 	baseDir string
 	db      *leveldb.DB
 	err     error
-	dbMeta  *DbMeta
-	readingSequence int64
-	writingSequence int64
+	dbMeta  *protos.DbMeta
+	readingSequence int32
+	writingSequence int32
 }
 
 func (v *Indexer) OpenOrCreate() {
@@ -27,7 +28,10 @@ func (v *Indexer) OpenOrCreate() {
 	v.dbMeta = v.getDbMeta()
 
 	if v.dbMeta == nil {
-		v.dbMeta = &DbMeta{v.baseDir, 0}
+		v.dbMeta = &protos.DbMeta{
+			BaseDir: v.baseDir,
+			Sequence: 0,
+		}
 	}
 	v.readingSequence = v.dbMeta.Sequence
 	v.writingSequence = v.readingSequence + 1
@@ -40,11 +44,11 @@ func (v *Indexer) Close() {
 	}
 }
 
-func (v *Indexer) GetDbMeta() *DbMeta {
+func (v *Indexer) GetDbMeta() *protos.DbMeta {
 	return v.dbMeta
 }
 
-func (v *Indexer) GetFileMeta(path string, isDir bool) *FileMeta {
+func (v *Indexer) GetFileMeta(path string, isDir bool) *protos.FileMeta {
 	data, err := v.db.Get([]byte(keyForPath(path, isDir)), nil)
 	if err != nil {
 		if err != leveldb.ErrNotFound {
@@ -52,15 +56,12 @@ func (v *Indexer) GetFileMeta(path string, isDir bool) *FileMeta {
 		}
 		return nil
 	}
-	var meta FileMeta
-	err = json.Unmarshal(data, &meta)
-	if err != nil {
-		log.Fatal("Unexpected error:", err)
-	}
+	var meta protos.FileMeta
+    proto.Unmarshal(data, &meta)
 	return &meta
 }
 
-func (v *Indexer) getDbMeta() *DbMeta {
+func (v *Indexer) getDbMeta() *protos.DbMeta {
 	data, err := v.db.Get([]byte("."), nil)
 	if err != nil {
 		if err != leveldb.ErrNotFound {
@@ -68,11 +69,8 @@ func (v *Indexer) getDbMeta() *DbMeta {
 		}
 		return nil
 	}
-	var meta DbMeta
-	err = json.Unmarshal(data, &meta)
-	if err != nil {
-		log.Fatal("Unexpected error:", err)
-	}
+	var meta protos.DbMeta
+	proto.Unmarshal(data, &meta)
 	return &meta
 }
 
@@ -96,7 +94,7 @@ func (v *Indexer) Update() error {
 	removedFileCount := 0
 	removedDirCount := 0
 	removedItems := make([]string, 100)
-	v.Iter(func(path string, meta *FileMeta) {
+	v.Iter(func(path string, meta *protos.FileMeta) {
 		if meta.Sequence != v.dbMeta.Sequence {
 			removedItems = append(removedItems, path)
 			if meta.IsDir {
@@ -114,19 +112,15 @@ func (v *Indexer) Update() error {
 	return nil
 }
 
-type IterFunc func(path string, meta *FileMeta)
+type IterFunc func(path string, meta *protos.FileMeta)
 
 func (v *Indexer) Iter(iterFunc IterFunc) {
 	iter := v.db.NewIterator(nil, nil)
 	for iter.Next() {
 		key := string(iter.Key())
-		var meta FileMeta
-		err := json.Unmarshal(iter.Value(), &meta)
-		if err != nil {
-			iterFunc(key, nil)
-		} else {
-			iterFunc(key, &meta)
-		}
+		var meta protos.FileMeta
+		proto.Unmarshal(iter.Value(), &meta)
+		iterFunc(key, &meta)
 	}
 	iter.Release()
 }
@@ -142,14 +136,15 @@ func (v *Indexer) updateDir(dir string, info os.FileInfo) (totalFileCount, total
 		return
 	}
 	fmt.Println("updating:" + relativePath)
-	dirInfo := &DirInfo{time.Now(), time.Time{}, 0, 0}
-	meta := FileMeta{
-		info.Size(),
-		info.IsDir(),
-		"",
-		info.ModTime(),
-		v.writingSequence,
-		dirInfo}
+	dirInfo := &protos.DirInfo{
+		UpdateTimeStart: int32(time.Now().Unix()),
+	}
+	meta := protos.FileMeta{
+		Size: info.Size(),
+		IsDir: true,
+		ModTime: int32(info.ModTime().Unix()),
+		Sequence: v.writingSequence,
+		DirInfo: dirInfo}
 
 	infos, err := readDir(dir)
 	if err != nil {
@@ -169,24 +164,23 @@ func (v *Indexer) updateDir(dir string, info os.FileInfo) (totalFileCount, total
 	}
 	dirInfo.TotalFileCount = totalFileCount
 	dirInfo.TotalFileSize = totalFileSize
-	v.putKeyValue(keyForPath(relativePath,true), meta)
+	v.putKeyValue(keyForPath(relativePath,true), &meta)
 	return
 }
 
 func (v *Indexer) updateFile(file string, info os.FileInfo) {
 	relativePath := file[len(v.baseDir):]
-	meta := FileMeta {
-		info.Size(),
-		false,
-		"",
-		info.ModTime(),
-		v.writingSequence,
-		nil}
-	v.putKeyValue(keyForPath(relativePath, false), meta)
+	meta := protos.FileMeta {
+		Size: info.Size(),
+		IsDir: false,
+		ModTime: int32(info.ModTime().Unix()),
+		Sequence: v.writingSequence,
+	}
+	v.putKeyValue(keyForPath(relativePath, false), &meta)
 }
 
-func (v *Indexer) putKeyValue(key string, value interface{}) error {
-	json, err := json.Marshal(value)
+func (v *Indexer) putKeyValue(key string, value proto.Message) error {
+	json, err := proto.Marshal(value)
 	if err != nil {
 		return err
 	}
