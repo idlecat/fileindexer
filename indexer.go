@@ -135,7 +135,10 @@ func (v *Indexer) updateDir(dir string, info os.FileInfo) (totalFileCount, total
 	totalFileCount = 0
 	totalFileSize = 0
 	relativePath := dir[len(v.baseDir):]
-	if (relativePath == "/fileIndexerDb") {
+	if relativePath == "/fileIndexerDb" {
+		return
+	}
+	if filepath.Base(relativePath) == "@eaDir" {
 		return
 	}
 	fmt.Println("updating:" + relativePath)
