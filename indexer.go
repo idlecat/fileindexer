@@ -6,16 +6,31 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 	"os"
 	"path/filepath"
+	"time"
+	"log"
 )
 
 type Indexer struct {
 	baseDir string
 	db      *leveldb.DB
 	err     error
+	dbMeta  *DbMeta
+	readingSequence int64
+	writingSequence int64
 }
 
-func (v *Indexer) Create() {
+func (v *Indexer) OpenOrCreate() {
 	v.db, v.err = leveldb.OpenFile(v.baseDir+"fileIndexerDb", nil)
+	if v.err != nil {
+		return
+	}
+	v.dbMeta = v.getDbMeta()
+
+	if v.dbMeta == nil {
+		v.dbMeta = &DbMeta{v.baseDir, 0}
+	}
+	v.readingSequence = v.dbMeta.Sequence
+	v.writingSequence = v.readingSequence + 1
 }
 
 func (v *Indexer) Close() {
@@ -25,39 +40,140 @@ func (v *Indexer) Close() {
 	}
 }
 
-func (v *Indexer) Update() bool {
-	fmt.Println("baseDir:" + v.baseDir)
-	filepath.Walk(v.baseDir, v.visit)
-	return true
+func (v *Indexer) GetDbMeta() *DbMeta {
+	return v.dbMeta
 }
 
-func (v *Indexer) GetFileMeta(path string) (*FileMeta, error) {
-	data, err := v.db.Get([]byte(path), nil)
+func (v *Indexer) GetFileMeta(path string, isDir bool) *FileMeta {
+	data, err := v.db.Get([]byte(keyForPath(path, isDir)), nil)
 	if err != nil {
-		return nil, err
+		if err != leveldb.ErrNotFound {
+			log.Fatal("Unexpected error:", err)
+		}
+		return nil
 	}
 	var meta FileMeta
-	return &meta, json.Unmarshal(data, &meta)
+	err = json.Unmarshal(data, &meta)
+	if err != nil {
+		log.Fatal("Unexpected error:", err)
+	}
+	return &meta
 }
 
-func (v *Indexer) visit(path string, f os.FileInfo, err error) error {
-	fmt.Printf("Visit: %s\n", path)
+func (v *Indexer) getDbMeta() *DbMeta {
+	data, err := v.db.Get([]byte("."), nil)
+	if err != nil {
+		if err != leveldb.ErrNotFound {
+			log.Fatal("Unexpected error:", err)
+		}
+		return nil
+	}
+	var meta DbMeta
+	err = json.Unmarshal(data, &meta)
+	if err != nil {
+		log.Fatal("Unexpected error:", err)
+	}
+	return &meta
+}
+
+// iterates all directories and updates directory if modified.
+func (v *Indexer) Update() error {
+	fmt.Println("updating:" + v.baseDir)
+	fileInfo, err := os.Lstat(v.baseDir)
+	if err != nil {
+		log.Fatal("Lstat failed on " + v.baseDir)
+	}
+	v.updateDir(v.baseDir, fileInfo)
+	fmt.Println("updated")
+	v.dbMeta.Sequence = v.writingSequence
+	v.readingSequence = v.writingSequence
+	v.writingSequence ++
+	return v.putKeyValue(".", v.dbMeta)
+}
+
+func (v *Indexer) updateDir(dir string, info os.FileInfo) (totalFileCount, totalFileSize int64) {
+	totalFileCount = 0
+	totalFileSize = 0
+	relativePath := dir[len(v.baseDir):]
+	if (relativePath == "/fileIndexerDb") {
+		return
+	}
+	fmt.Println("updating:" + relativePath)
+	dirInfo := &DirInfo{time.Now(), time.Time{}, 0, 0}
 	meta := FileMeta{
-		path,
-		f.Size(),
-		f.IsDir(),
+		info.Size(),
+		info.IsDir(),
 		"",
-		f.ModTime()}
-	json, err := json.Marshal(meta)
+		info.ModTime(),
+		v.writingSequence,
+		dirInfo}
+
+	infos, err := readDir(dir)
+	if err != nil {
+		log.Fatal("readDir failed on " + dir)
+	}
+
+	for _, info := range infos {
+		if info.IsDir() {
+			count, size := v.updateDir(filepath.Join(dir, info.Name()), info)
+			totalFileCount += count
+			totalFileSize += size
+		} else {
+			totalFileCount += 1
+			totalFileSize += info.Size()
+			v.updateFile(filepath.Join(dir, info.Name()), info)
+		}
+	}
+	dirInfo.TotalFileCount = totalFileCount
+	dirInfo.TotalFileSize = totalFileSize
+	v.putKeyValue(keyForPath(relativePath,true), meta)
+	return
+}
+
+func (v *Indexer) updateFile(file string, info os.FileInfo) {
+	relativePath := file[len(v.baseDir):]
+	meta := FileMeta {
+		info.Size(),
+		false,
+		"",
+		info.ModTime(),
+		v.writingSequence,
+		nil}
+	v.putKeyValue(keyForPath(relativePath, false), meta)
+}
+
+func (v *Indexer) putKeyValue(key string, value interface{}) error {
+	json, err := json.Marshal(value)
 	if err != nil {
 		return err
 	}
-	v.db.Put([]byte(path), json, nil)
+	v.db.Put([]byte(key), json, nil)
 	return nil
 }
 
 func NewIndexer(baseDir string) *Indexer {
-	indexer := Indexer{baseDir, nil, nil}
-	indexer.Create()
+	indexer := Indexer{baseDir, nil, nil, nil, 0, 0}
+	indexer.OpenOrCreate()
 	return &indexer
+}
+
+func keyForPath(path string, isDir bool) string {
+	prefix := "f"
+	if isDir {
+		prefix = "d"
+	}
+	return prefix + path
+}
+
+func readDir(dirname string) ([]os.FileInfo, error) {
+	f, err := os.Open(dirname)
+	if err != nil {
+		return nil, err
+	}
+	fileInfo, err := f.Readdir(0)
+	f.Close()
+	if err != nil {
+		return nil, err
+	}
+	return fileInfo, nil
 }
