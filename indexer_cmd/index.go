@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/idlecat/fileindexer"
 	"github.com/idlecat/fileindexer/protos"
-	"os"
+	"log"
 )
 
 var baseDir = flag.String("baseDir", "", "dir to open index")
@@ -13,39 +13,39 @@ var op = flag.String("op", "info", "operations defined as OP_*")
 var dedupDir = flag.String("dedupDir", "", "dir to check duplicated files")
 
 const (
-	OP_UPDATE = "update"
-	OP_INFO = "info"
-	OP_LIST = "list"
-	OP_DEDUP = "dedup"
+	OP_UPDATE    = "update"
+	OP_INFO      = "info"
+	OP_LIST      = "list"
+	OP_DEDUP     = "dedup"
+	OP_QUICKSCAN = "qscan"
 )
+
 var indexer *fileindexer.Indexer
 
 func main() {
 	flag.Parse()
-	var err error
 	if *baseDir == "" {
-		*baseDir, err = os.Getwd()
-		if err != nil {
-			fmt.Println("baseDir should be specified.")
-		}
-	}
-	for i := 0; i < flag.NArg(); i++ {
-		fmt.Println(flag.Arg(i))
+		log.Fatal("baseDir should be specified.")
 	}
 	indexer = fileindexer.NewIndexer(*baseDir)
 	defer indexer.Close()
 
-	switch *op {
-		case OP_UPDATE:
-			update()
-		case OP_INFO:
-			info()
-		case OP_LIST:
-			list()
-		case OP_DEDUP:
-			dedup()
+	if indexer.GetError() != nil {
+		log.Fatal("Failed to create indexer.")
 	}
 
+	switch *op {
+	case OP_UPDATE:
+		update()
+	case OP_INFO:
+		info()
+	case OP_LIST:
+		list()
+	case OP_DEDUP:
+		dedup()
+	case OP_QUICKSCAN:
+		quickScan()
+	}
 
 	meta := indexer.GetFileMeta(flag.Arg(0), false)
 	if meta != nil {
@@ -58,7 +58,8 @@ func update() {
 }
 
 func info() {
-	fmt.Println("baseDir:", indexer.GetDbMeta().BaseDir)
+	fmt.Println(indexer.GetDbMeta())
+	fmt.Println(indexer.GetFileMeta("", true))
 }
 
 func list() {
@@ -68,5 +69,11 @@ func list() {
 }
 
 func dedup() {
-	
+
+}
+
+func quickScan() {
+	info := fileindexer.RepositoryInfo{}
+	indexer.QuickScan(&info)
+	fmt.Printf("Total File:%d, Total Size:%d\n", info.FileCount, info.FileSize)
 }

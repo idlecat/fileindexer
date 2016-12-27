@@ -8,6 +8,7 @@ message FileMeta {
   int32 modTime = 4;
   int32 sequence = 5;
   DirInfo dirInfo = 6;
+  string relativePath = 7;
 }
 
 message DirInfo {
@@ -22,3 +23,6 @@ message DbMeta {
   int32 sequence = 2;
 }
 
+message FilePaths {
+  repeated string paths = 1;
+}
