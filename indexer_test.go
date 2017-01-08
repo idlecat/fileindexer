@@ -50,9 +50,13 @@ type HashTest struct {
 
 func VerifyDirTests(indexer *fileindexer.Indexer, tests []DirTest, t *testing.T) {
 	for _, dt := range tests {
-		meta := indexer.GetDirMeta(dt.relativePath)
+		meta := indexer.GetFileOrDirMeta(dt.relativePath)
 		if meta == nil {
 			t.Errorf("%s has no meta found", dt.relativePath)
+			continue
+		}
+		if !meta.IsDir {
+			t.Errorf("%s is file", dt.relativePath)
 			continue
 		}
 		ExpectEqual(t, dt.dirInfo.TotalFileSize, meta.DirInfo.TotalFileSize, dt.relativePath+" file size")
@@ -62,9 +66,13 @@ func VerifyDirTests(indexer *fileindexer.Indexer, tests []DirTest, t *testing.T)
 
 func VerifyFileTests(indexer *fileindexer.Indexer, tests []FileTest, t *testing.T) {
 	for _, ft := range tests {
-		meta := indexer.GetFileMeta(ft.relativePath)
+		meta := indexer.GetFileOrDirMeta(ft.relativePath)
 		if meta == nil {
 			t.Errorf("%s has no meta found", ft.relativePath)
+			continue
+		}
+		if meta.IsDir {
+			t.Errorf("%s is directory", ft.relativePath)
 			continue
 		}
 		ExpectEqual(t, ft.meta.Size, meta.Size, ft.relativePath+" size")

@@ -52,7 +52,6 @@ func (v *RepositoryInfo) Add(other *RepositoryInfo) {
 
 const (
 	PREFIX_FILE = 'f'
-	PREFIX_DIR  = 'd'
 	PREFIX_HASH = 'h'
 	KEY_DB_META = "."
 )
@@ -131,18 +130,9 @@ func (v *Indexer) GetError() error {
 	return v.err
 }
 
-func (v *Indexer) GetFileMeta(relativePath string) *protos.FileMeta {
+func (v *Indexer) GetFileOrDirMeta(relativePath string) *protos.FileMeta {
 	var meta protos.FileMeta
-	if v.getProto(keyForPath(relativePath, false), &meta) {
-		return &meta
-	} else {
-		return nil
-	}
-}
-
-func (v *Indexer) GetDirMeta(relativePath string) *protos.FileMeta {
-	var meta protos.FileMeta
-	if v.getProto(keyForPath(relativePath, true), &meta) {
+	if v.getProto(keyForPath(relativePath), &meta) {
 		return &meta
 	} else {
 		return nil
@@ -219,7 +209,7 @@ func (v *Indexer) Iter(iterFunc IterFunc) {
 	iter := v.db.NewIterator(nil, nil)
 	for iter.Next() {
 		key := string(iter.Key())
-		if key[0] != PREFIX_DIR && key[0] != PREFIX_FILE {
+		if key[0] != PREFIX_FILE {
 			continue
 		}
 		var meta protos.FileMeta
@@ -261,7 +251,7 @@ func (v *Indexer) updateDir(dir string, info os.FileInfo) *RepositoryInfo {
 	dirInfo.TotalFileCount = rInfo.FileCount
 	dirInfo.TotalFileSize = rInfo.FileSize
 	dirInfo.UpdateTimeEnd = int32(time.Now().Unix())
-	v.putFileOrDirMeta(dir, true, &meta)
+	v.putFileOrDirMeta(dir, &meta)
 	return &rInfo
 }
 
@@ -271,7 +261,7 @@ func (v *Indexer) updateFile(file string, info os.FileInfo) *RepositoryInfo {
 		FileSize:  info.Size(),
 	}
 	relativePath := v.getRelativePath(file)
-	meta := v.GetFileMeta(relativePath)
+	meta := v.GetFileOrDirMeta(relativePath)
 	md5sum := ""
 	var err error
 	if meta == nil || meta.Size != info.Size() || meta.ModTime != int32(info.ModTime().Unix()) {
@@ -292,7 +282,7 @@ func (v *Indexer) updateFile(file string, info os.FileInfo) *RepositoryInfo {
 		ModTime:  int32(info.ModTime().Unix()),
 		Sequence: v.writingSequence,
 	}
-	v.putFileOrDirMeta(file, false, &newMeta)
+	v.putFileOrDirMeta(file, &newMeta)
 	if meta == nil || meta.Md5Sum != md5sum {
 		// need to update hash entry.
 		if meta != nil {
@@ -306,7 +296,7 @@ func (v *Indexer) updateFile(file string, info os.FileInfo) *RepositoryInfo {
 }
 
 func (v *Indexer) removeItem(meta *protos.FileMeta) {
-	key := keyForPath(meta.RelativePath, meta.IsDir)
+	key := keyForPath(meta.RelativePath)
 	v.db.Delete([]byte(key), nil)
 	if !meta.IsDir {
 		v.removeHash(meta.Md5Sum, meta.RelativePath)
@@ -324,9 +314,9 @@ func (v *Indexer) putKeyValue(key string, value proto.Message) {
 	}
 }
 
-func (v *Indexer) putFileOrDirMeta(path string, isDir bool, meta proto.Message) {
+func (v *Indexer) putFileOrDirMeta(path string, meta proto.Message) {
 	relativePath := v.getRelativePath(path)
-	v.putKeyValue(keyForPath(relativePath, isDir), meta)
+	v.putKeyValue(keyForPath(relativePath), meta)
 }
 
 func (v *Indexer) getRelativePath(path string) string {
@@ -422,10 +412,6 @@ func NewIndexer(baseDir string, indexDir string) *Indexer {
 	return &indexer
 }
 
-func keyForPath(path string, isDir bool) string {
-	prefix := PREFIX_FILE
-	if isDir {
-		prefix = PREFIX_DIR
-	}
-	return string(prefix) + path
+func keyForPath(path string) string {
+	return string(PREFIX_FILE) + path
 }

@@ -50,7 +50,6 @@ func main() {
 	case OP_INTERSECT_WITH:
 		intersectWith()
 	}
-
 }
 
 func update() {
@@ -60,10 +59,7 @@ func update() {
 func info() {
 	fmt.Println(indexer.GetDbMeta())
 
-	meta := indexer.GetFileMeta(flag.Arg(0))
-	if meta == nil {
-		meta = indexer.GetDirMeta(flag.Arg(0))
-	}
+	meta := indexer.GetFileOrDirMeta(flag.Arg(0))
 
 	if meta != nil {
 		fmt.Println(meta)
