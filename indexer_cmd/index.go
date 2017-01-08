@@ -13,11 +13,12 @@ var op = flag.String("op", "info", "operations defined as OP_*")
 var dedupDir = flag.String("dedupDir", "", "dir to check duplicated files")
 
 const (
-	OP_UPDATE    = "update"
-	OP_INFO      = "info"
-	OP_LIST      = "list"
-	OP_DEDUP     = "dedup"
-	OP_QUICKSCAN = "qscan"
+	OP_UPDATE         = "update"
+	OP_INFO           = "info"
+	OP_LIST           = "list"
+	OP_DEDUP          = "dedup"
+	OP_QUICKSCAN      = "qscan"
+	OP_INTERSECT_WITH = "intersect_with"
 )
 
 var indexer *fileindexer.Indexer
@@ -45,12 +46,10 @@ func main() {
 		dedup()
 	case OP_QUICKSCAN:
 		quickScan()
+	case OP_INTERSECT_WITH:
+		intersectWith()
 	}
 
-	meta := indexer.GetFileMeta(flag.Arg(0), false)
-	if meta != nil {
-		fmt.Println(meta)
-	}
 }
 
 func update() {
@@ -59,7 +58,17 @@ func update() {
 
 func info() {
 	fmt.Println(indexer.GetDbMeta())
-	fmt.Println(indexer.GetFileMeta("", true))
+
+	meta := indexer.GetFileMeta(flag.Arg(0))
+	if meta == nil {
+		meta = indexer.GetDirMeta(flag.Arg(0))
+	}
+
+	if meta != nil {
+		fmt.Println(meta)
+	} else {
+		fmt.Println("No meta found for ", flag.Arg(0))
+	}
 }
 
 func list() {
@@ -68,12 +77,14 @@ func list() {
 	})
 }
 
-func dedup() {
-
-}
-
 func quickScan() {
 	info := fileindexer.RepositoryInfo{}
 	indexer.QuickScan(&info)
 	fmt.Printf("Total File:%d, Total Size:%d\n", info.FileCount, info.FileSize)
+}
+
+func dedup() {
+}
+
+func intersectWith() {
 }

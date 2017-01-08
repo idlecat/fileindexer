@@ -15,7 +15,7 @@ message DirInfo {
   int32 updateTimeStart = 1;
   int32 updateTimeEnd = 2;
   int64 totalFileSize = 3;
-  int64 totalFileCount = 4;
+  int32 totalFileCount = 4;
 }
 
 message DbMeta {
