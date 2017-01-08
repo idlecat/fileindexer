@@ -117,7 +117,7 @@ func TestCreateIndexer(t *testing.T) {
 	dir := setUp()
 	defer os.RemoveAll(dir)
 
-	indexer := fileindexer.NewIndexer(dir)
+	indexer := fileindexer.NewIndexer(dir, "")
 	defer indexer.Close()
 	indexer.Update()
 
@@ -153,7 +153,7 @@ func TestUpdateIndexerWithoutChange(t *testing.T) {
 	dir := setUp()
 	defer os.RemoveAll(dir)
 
-	indexer := fileindexer.NewIndexer(dir)
+	indexer := fileindexer.NewIndexer(dir, "")
 	defer indexer.Close()
 	indexer.Update()
 	indexer.Update()
@@ -190,7 +190,7 @@ func TestFileRemoved(t *testing.T) {
 	dir := setUp()
 	defer os.RemoveAll(dir)
 
-	indexer := fileindexer.NewIndexer(dir)
+	indexer := fileindexer.NewIndexer(dir, "")
 	defer indexer.Close()
 	indexer.Update()
 
@@ -223,7 +223,7 @@ func TestDirRemoved(t *testing.T) {
 	dir := setUp()
 	defer os.RemoveAll(dir)
 
-	indexer := fileindexer.NewIndexer(dir)
+	indexer := fileindexer.NewIndexer(dir, "")
 	defer indexer.Close()
 	indexer.Update()
 
@@ -255,7 +255,7 @@ func TestFileModified(t *testing.T) {
 	dir := setUp()
 	defer os.RemoveAll(dir)
 
-	indexer := fileindexer.NewIndexer(dir)
+	indexer := fileindexer.NewIndexer(dir, "")
 	defer indexer.Close()
 	indexer.Update()
 
@@ -289,7 +289,7 @@ func TestFileAdded(t *testing.T) {
 	dir := setUp()
 	defer os.RemoveAll(dir)
 
-	indexer := fileindexer.NewIndexer(dir)
+	indexer := fileindexer.NewIndexer(dir, "")
 	defer indexer.Close()
 	indexer.Update()
 
@@ -324,7 +324,7 @@ func TestDirAdded(t *testing.T) {
 	dir := setUp()
 	defer os.RemoveAll(dir)
 
-	indexer := fileindexer.NewIndexer(dir)
+	indexer := fileindexer.NewIndexer(dir, "")
 	defer indexer.Close()
 	indexer.Update()
 

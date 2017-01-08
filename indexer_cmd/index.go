@@ -8,7 +8,8 @@ import (
 	"log"
 )
 
-var baseDir = flag.String("baseDir", "", "dir to open index")
+var baseDir = flag.String("baseDir", "", "dir to build index for")
+var indexDir = flag.String("indexDir", "", "dir to store index. default to baseDir/fileIndexerDb if provided empty")
 var op = flag.String("op", "info", "operations defined as OP_*")
 var dedupDir = flag.String("dedupDir", "", "dir to check duplicated files")
 
@@ -28,7 +29,7 @@ func main() {
 	if *baseDir == "" {
 		log.Fatal("baseDir should be specified.")
 	}
-	indexer = fileindexer.NewIndexer(*baseDir)
+	indexer = fileindexer.NewIndexer(*baseDir, *indexDir)
 	defer indexer.Close()
 
 	if indexer.GetError() != nil {

@@ -57,8 +57,8 @@ const (
 	KEY_DB_META = "."
 )
 
-func (v *Indexer) OpenOrCreate() {
-	v.db, v.err = leveldb.OpenFile(path.Join(v.baseDir, "fileIndexerDb"), nil)
+func (v *Indexer) OpenOrCreate(indexDir string) {
+	v.db, v.err = leveldb.OpenFile(indexDir, nil)
 	if v.err != nil {
 		return
 	}
@@ -413,9 +413,12 @@ func hashFile(filePath string) (string, error) {
 	return returnMD5String, nil
 }
 
-func NewIndexer(baseDir string) *Indexer {
+func NewIndexer(baseDir string, indexDir string) *Indexer {
+	if indexDir == "" {
+		indexDir = path.Join(baseDir, "fileIndexerDb")
+	}
 	indexer := Indexer{baseDir, nil, nil, nil, 0, 0}
-	indexer.OpenOrCreate()
+	indexer.OpenOrCreate(indexDir)
 	return &indexer
 }
 
