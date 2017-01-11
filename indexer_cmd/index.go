@@ -6,12 +6,14 @@ import (
 	"github.com/idlecat/fileindexer"
 	"github.com/idlecat/fileindexer/protos"
 	"log"
+	"os"
 )
 
 var baseDir = flag.String("baseDir", "", "dir to build index for")
 var indexDir = flag.String("indexDir", "", "dir to store index. default to baseDir/fileIndexerDb if provided empty")
 var op = flag.String("op", "info", "operations defined as OP_*")
-var dedupDir = flag.String("dedupDir", "", "dir to check duplicated files")
+var intersectDir = flag.String("intersectDir", "", "dir to check duplicated files")
+var intersectIndexDir = flag.String("intersectIndexDir", "", "index to check duplicated files")
 
 const (
 	OP_UPDATE         = "update"
@@ -19,7 +21,7 @@ const (
 	OP_LIST           = "list"
 	OP_DEDUP          = "dedup"
 	OP_QUICKSCAN      = "qscan"
-	OP_INTERSECT_WITH = "intersect_with"
+	OP_INTERSECT_WITH = "intersect"
 )
 
 var indexer *fileindexer.Indexer
@@ -29,7 +31,7 @@ func main() {
 	if *baseDir == "" {
 		log.Fatal("baseDir should be specified.")
 	}
-	indexer = fileindexer.NewIndexer(*baseDir, *indexDir)
+	indexer = fileindexer.OpenOrCreate(*baseDir, *indexDir)
 	defer indexer.Close()
 
 	if indexer.GetError() != nil {
@@ -81,7 +83,65 @@ func quickScan() {
 }
 
 func dedup() {
+	count := 0
+	var size int64 = 0
+	indexer.IterHash(func(hash string, fileSize int64, paths []string) {
+		if len(paths) > 1 {
+			fmt.Printf("hash:%s\n", hash)
+			for _, path := range paths {
+				fmt.Println(path)
+			}
+			count += len(paths) - 1
+			size += (len(paths) - 1) * fileSize
+		}
+	})
+	fmt.Printf("Total: %d\n", count)
 }
 
 func intersectWith() {
+	if *intersectDir == "" && *intersectIndexDir == "" {
+		log.Fatal("Please provide --intersectDir or --intersectIndexDir")
+	}
+	dupCount := 0
+	var dupSize int64 = 0
+	uniqCount := 0
+	var uniqSize int64 = 0
+	if *intersectDir != "" {
+		fileindexer.ScanDir(*intersectDir, func(path string, info os.FileInfo) int {
+			if info.IsDir() {
+				return fileindexer.NORMAL
+			}
+			hash, _ := fileindexer.HashFile(path)
+			files := indexer.GetFilesByHash(hash)
+			if files != nil && len(files) > 1 {
+				// duplicated
+				dupCount += 1
+				dupSize += info.Size()
+			} else {
+				uniqCount += 1
+				uniqSize += info.Size()
+			}
+			return fileindexer.NORMAL
+		})
+	} else {
+		otherIndexer := fileindexer.OpenOrDie(*intersectIndexDir)
+		otherIndexer.IterHash(func(hash string, fileSize int64, paths []string) {
+			files := indexer.GetFilesByHash(hash)
+			if files != nil && len(files) > 1 {
+				// duplicated
+				for _, p := range paths {
+					fmt.Printf("%s\n", p)
+				}
+				dupCount += len(files)
+				dupSize += fileSize * len(files)
+			} else {
+				uniqCount += 1
+				uniqSize += fileSize * len(files)
+			}
+		})
+	}
+	fmt.Printf("Total duplicated files: %d\n", dupCount)
+	fmt.Printf("Total duplicated files size: %d\n", dupSize)
+	fmt.Printf("Total unique files: %d\n", uniqCount)
+	fmt.Printf("Total unique files size: %d\n", uniqSize)
 }

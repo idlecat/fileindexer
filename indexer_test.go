@@ -82,7 +82,7 @@ func VerifyFileTests(indexer *fileindexer.Indexer, tests []FileTest, t *testing.
 
 func VerifyHashTests(indexer *fileindexer.Indexer, tests []HashTest, t *testing.T) {
 	for _, test := range tests {
-		files := indexer.GetFilesByHash(test.hash)
+		_, files := indexer.GetFilesByHash(test.hash)
 		if files == nil && test.files != nil {
 			t.Errorf("hash %s has no file found", test.hash)
 			continue
@@ -125,7 +125,7 @@ func TestCreateIndexer(t *testing.T) {
 	dir := setUp()
 	defer os.RemoveAll(dir)
 
-	indexer := fileindexer.NewIndexer(dir, "")
+	indexer := fileindexer.OpenOrCreate(dir, "")
 	defer indexer.Close()
 	indexer.Update()
 
@@ -161,7 +161,7 @@ func TestUpdateIndexerWithoutChange(t *testing.T) {
 	dir := setUp()
 	defer os.RemoveAll(dir)
 
-	indexer := fileindexer.NewIndexer(dir, "")
+	indexer := fileindexer.OpenOrCreate(dir, "")
 	defer indexer.Close()
 	indexer.Update()
 	indexer.Update()
@@ -198,7 +198,7 @@ func TestFileRemoved(t *testing.T) {
 	dir := setUp()
 	defer os.RemoveAll(dir)
 
-	indexer := fileindexer.NewIndexer(dir, "")
+	indexer := fileindexer.OpenOrCreate(dir, "")
 	defer indexer.Close()
 	indexer.Update()
 
@@ -231,7 +231,7 @@ func TestDirRemoved(t *testing.T) {
 	dir := setUp()
 	defer os.RemoveAll(dir)
 
-	indexer := fileindexer.NewIndexer(dir, "")
+	indexer := fileindexer.OpenOrCreate(dir, "")
 	defer indexer.Close()
 	indexer.Update()
 
@@ -263,7 +263,7 @@ func TestFileModified(t *testing.T) {
 	dir := setUp()
 	defer os.RemoveAll(dir)
 
-	indexer := fileindexer.NewIndexer(dir, "")
+	indexer := fileindexer.OpenOrCreate(dir, "")
 	defer indexer.Close()
 	indexer.Update()
 
@@ -297,7 +297,7 @@ func TestFileAdded(t *testing.T) {
 	dir := setUp()
 	defer os.RemoveAll(dir)
 
-	indexer := fileindexer.NewIndexer(dir, "")
+	indexer := fileindexer.OpenOrCreate(dir, "")
 	defer indexer.Close()
 	indexer.Update()
 
@@ -332,7 +332,7 @@ func TestDirAdded(t *testing.T) {
 	dir := setUp()
 	defer os.RemoveAll(dir)
 
-	indexer := fileindexer.NewIndexer(dir, "")
+	indexer := fileindexer.OpenOrCreate(dir, "")
 	defer indexer.Close()
 	indexer.Update()
 

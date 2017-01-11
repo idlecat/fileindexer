@@ -1,13 +1,11 @@
 package fileindexer
 
 import (
-	"crypto/md5"
-	"encoding/hex"
 	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/idlecat/fileindexer/protos"
 	"github.com/syndtr/goleveldb/leveldb"
-	"io"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -71,6 +69,24 @@ func (v *Indexer) OpenOrCreate(indexDir string) {
 	}
 	v.readingSequence = v.dbMeta.Sequence
 	v.writingSequence = v.readingSequence + 1
+	log.Printf("Open indexer db with sequence %d", v.readingSequence)
+}
+
+func (v *Indexer) OpenOrDie(indexDir string) {
+	options := opt.Options{
+		ErrorIfMissing: true,
+	}
+	v.db, v.err = leveldb.OpenFile(indexDir, &options)
+	if v.err != nil {
+		log.Fatal("No index found at " + indexDir)
+	}
+	v.dbMeta = v.getDbMeta()
+	if v.dbMeta == nil {
+		log.Fatal("No db meta found")
+	}
+	v.readingSequence = v.dbMeta.Sequence
+	v.writingSequence = v.readingSequence + 1
+	v.baseDir = v.dbMeta.BaseDir
 	log.Printf("Open indexer db with sequence %d", v.readingSequence)
 }
 
@@ -219,6 +235,22 @@ func (v *Indexer) Iter(iterFunc IterFunc) {
 	iter.Release()
 }
 
+type IterHashFunc func(hash string, fileSize int64, paths []string)
+
+func (v *Indexer) IterHash(iterFunc IterHashFunc) {
+	iter := v.db.NewIterator(nil, nil)
+	for iter.Next() {
+		key := string(iter.Key())
+		if key[0] != PREFIX_HASH {
+			continue
+		}
+		var paths protos.FilePaths
+		proto.Unmarshal(iter.Value(), &paths)
+		iterFunc(key[1:], paths.FileSize, paths.Paths)
+	}
+	iter.Release()
+}
+
 func (v *Indexer) updateDir(dir string, info os.FileInfo) *RepositoryInfo {
 	fmt.Println("updating dir:" + dir)
 	if v.shouldSkipPath(dir) {
@@ -266,7 +298,7 @@ func (v *Indexer) updateFile(file string, info os.FileInfo) *RepositoryInfo {
 	var err error
 	if meta == nil || meta.Size != info.Size() || meta.ModTime != int32(info.ModTime().Unix()) {
 		// calculates hash for new/changed file.
-		md5sum, err = hashFile(file)
+		md5sum, err = HashFile(file)
 		if err != nil {
 			log.Print(err)
 			return nil
@@ -288,7 +320,7 @@ func (v *Indexer) updateFile(file string, info os.FileInfo) *RepositoryInfo {
 		if meta != nil {
 			v.removeHash(meta.Md5Sum, relativePath)
 		}
-		v.addHash(md5sum, relativePath)
+		v.addHash(md5sum, info.Size(), relativePath)
 		rInfo.ChangedFileCount = 1
 		rInfo.ChangedFileSize = info.Size()
 	}
@@ -333,7 +365,7 @@ func keyForHash(hash string) string {
 	return string(PREFIX_HASH) + hash
 }
 
-func (v *Indexer) addHash(md5sum string, relativePath string) {
+func (v *Indexer) addHash(md5sum string, fileSize int64, relativePath string) {
 	var paths protos.FilePaths
 	key := keyForHash(md5sum)
 	if v.getProto(key, &paths) {
@@ -346,6 +378,7 @@ func (v *Indexer) addHash(md5sum string, relativePath string) {
 		paths = protos.FilePaths{}
 	}
 	paths.Paths = append(paths.Paths, relativePath)
+	paths.FileSize = fileSize
 	v.putKeyValue(key, &paths)
 }
 
@@ -377,38 +410,28 @@ func (v *Indexer) removeHash(md5sum string, relativePath string) {
 	}
 }
 
-func (v *Indexer) GetFilesByHash(hash string) []string {
+func (v *Indexer) GetFilesByHash(hash string) (int64, []string) {
 	var paths protos.FilePaths
 	key := keyForHash(hash)
 	if v.getProto(key, &paths) {
-		return paths.Paths
+		return paths.FileSize, paths.Paths
 	} else {
-		return nil
+		return 0, nil
 	}
 }
 
-func hashFile(filePath string) (string, error) {
-	var returnMD5String string
-	file, err := os.Open(filePath)
-	if err != nil {
-		return returnMD5String, err
-	}
-	defer file.Close()
-	hash := md5.New()
-	if _, err := io.Copy(hash, file); err != nil {
-		return returnMD5String, err
-	}
-	hashInBytes := hash.Sum(nil)[:16]
-	returnMD5String = hex.EncodeToString(hashInBytes)
-	return returnMD5String, nil
-}
-
-func NewIndexer(baseDir string, indexDir string) *Indexer {
+func OpenOrCreate(baseDir string, indexDir string) *Indexer {
 	if indexDir == "" {
 		indexDir = path.Join(baseDir, "fileIndexerDb")
 	}
 	indexer := Indexer{baseDir, nil, nil, nil, 0, 0}
 	indexer.OpenOrCreate(indexDir)
+	return &indexer
+}
+
+func OpenOrDie(indexDir string) *Indexer {
+	indexer := Indexer{}
+	indexer.OpenOrDie(indexDir)
 	return &indexer
 }
 
