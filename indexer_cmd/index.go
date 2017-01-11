@@ -92,7 +92,7 @@ func dedup() {
 				fmt.Println(path)
 			}
 			count += len(paths) - 1
-			size += (len(paths) - 1) * fileSize
+			size += int64(len(paths)-1) * fileSize
 		}
 	})
 	fmt.Printf("Total: %d\n", count)
@@ -112,7 +112,7 @@ func intersectWith() {
 				return fileindexer.NORMAL
 			}
 			hash, _ := fileindexer.HashFile(path)
-			files := indexer.GetFilesByHash(hash)
+			_, files := indexer.GetFilesByHash(hash)
 			if files != nil && len(files) > 1 {
 				// duplicated
 				dupCount += 1
@@ -126,17 +126,17 @@ func intersectWith() {
 	} else {
 		otherIndexer := fileindexer.OpenOrDie(*intersectIndexDir)
 		otherIndexer.IterHash(func(hash string, fileSize int64, paths []string) {
-			files := indexer.GetFilesByHash(hash)
+			_, files := indexer.GetFilesByHash(hash)
 			if files != nil && len(files) > 1 {
 				// duplicated
 				for _, p := range paths {
 					fmt.Printf("%s\n", p)
 				}
 				dupCount += len(files)
-				dupSize += fileSize * len(files)
+				dupSize += fileSize * int64(len(files))
 			} else {
 				uniqCount += 1
-				uniqSize += fileSize * len(files)
+				uniqSize += fileSize * int64(len(files))
 			}
 		})
 	}
