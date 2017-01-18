@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 )
 
@@ -134,7 +135,7 @@ func TestCreateIndexer(t *testing.T) {
 		t.Errorf("DbMeta", dbMeta)
 	}
 
-	var dirTests = []DirTest{
+	dirTests := []DirTest{
 		{"", protos.DirInfo{TotalFileSize: 11, TotalFileCount: 3}},
 		{"dir1", protos.DirInfo{TotalFileSize: 8, TotalFileCount: 2}},
 		{"dir1/dir11", protos.DirInfo{TotalFileSize: 5, TotalFileCount: 1}},
@@ -142,14 +143,14 @@ func TestCreateIndexer(t *testing.T) {
 	}
 	VerifyDirTests(indexer, dirTests, t)
 
-	var fileTests = []FileTest{
+	fileTests := []FileTest{
 		{"dir1/abc", protos.FileMeta{Size: 3, Md5Sum: ABC_MD5SUM}},
 		{"dir2/xyz", protos.FileMeta{Size: 3, Md5Sum: XYZ_MD5SUM}},
 		{"dir1/dir11/xdong", protos.FileMeta{Size: 5, Md5Sum: XDONG_MD5SUM}},
 	}
 	VerifyFileTests(indexer, fileTests, t)
 
-	var hashTests = []HashTest{
+	hashTests := []HashTest{
 		{ABC_MD5SUM, []string{"dir1/abc"}},
 		{XYZ_MD5SUM, []string{"dir2/xyz"}},
 		{XDONG_MD5SUM, []string{"dir1/dir11/xdong"}},
@@ -171,7 +172,7 @@ func TestUpdateIndexerWithoutChange(t *testing.T) {
 		t.Errorf("DbMeta", dbMeta)
 	}
 
-	var dirTests = []DirTest{
+	dirTests := []DirTest{
 		{"", protos.DirInfo{TotalFileSize: 11, TotalFileCount: 3}},
 		{"dir1", protos.DirInfo{TotalFileSize: 8, TotalFileCount: 2}},
 		{"dir1/dir11", protos.DirInfo{TotalFileSize: 5, TotalFileCount: 1}},
@@ -179,14 +180,14 @@ func TestUpdateIndexerWithoutChange(t *testing.T) {
 	}
 	VerifyDirTests(indexer, dirTests, t)
 
-	var fileTests = []FileTest{
+	fileTests := []FileTest{
 		{"dir1/abc", protos.FileMeta{Size: 3, Md5Sum: ABC_MD5SUM}},
 		{"dir2/xyz", protos.FileMeta{Size: 3, Md5Sum: XYZ_MD5SUM}},
 		{"dir1/dir11/xdong", protos.FileMeta{Size: 5, Md5Sum: XDONG_MD5SUM}},
 	}
 	VerifyFileTests(indexer, fileTests, t)
 
-	var hashTests = []HashTest{
+	hashTests := []HashTest{
 		{ABC_MD5SUM, []string{"dir1/abc"}},
 		{XYZ_MD5SUM, []string{"dir2/xyz"}},
 		{XDONG_MD5SUM, []string{"dir1/dir11/xdong"}},
@@ -205,7 +206,7 @@ func TestFileRemoved(t *testing.T) {
 	_ = os.Remove(filepath.Join(dir, "dir1/abc"))
 	indexer.Update()
 
-	var dirTests = []DirTest{
+	dirTests := []DirTest{
 		{"", protos.DirInfo{TotalFileSize: 8, TotalFileCount: 2}},
 		{"dir1", protos.DirInfo{TotalFileSize: 5, TotalFileCount: 1}},
 		{"dir1/dir11", protos.DirInfo{TotalFileSize: 5, TotalFileCount: 1}},
@@ -213,13 +214,13 @@ func TestFileRemoved(t *testing.T) {
 	}
 	VerifyDirTests(indexer, dirTests, t)
 
-	var fileTests = []FileTest{
+	fileTests := []FileTest{
 		{"dir2/xyz", protos.FileMeta{Size: 3, Md5Sum: XYZ_MD5SUM}},
 		{"dir1/dir11/xdong", protos.FileMeta{Size: 5, Md5Sum: XDONG_MD5SUM}},
 	}
 	VerifyFileTests(indexer, fileTests, t)
 
-	var hashTests = []HashTest{
+	hashTests := []HashTest{
 		{ABC_MD5SUM, nil},
 		{XYZ_MD5SUM, []string{"dir2/xyz"}},
 		{XDONG_MD5SUM, []string{"dir1/dir11/xdong"}},
@@ -238,20 +239,20 @@ func TestDirRemoved(t *testing.T) {
 	_ = os.RemoveAll(filepath.Join(dir, "dir1/dir11"))
 	indexer.Update()
 
-	var dirTests = []DirTest{
+	dirTests := []DirTest{
 		{"", protos.DirInfo{TotalFileSize: 6, TotalFileCount: 2}},
 		{"dir1", protos.DirInfo{TotalFileSize: 3, TotalFileCount: 1}},
 		{"dir2", protos.DirInfo{TotalFileSize: 3, TotalFileCount: 1}},
 	}
 	VerifyDirTests(indexer, dirTests, t)
 
-	var fileTests = []FileTest{
+	fileTests := []FileTest{
 		{"dir1/abc", protos.FileMeta{Size: 3, Md5Sum: ABC_MD5SUM}},
 		{"dir2/xyz", protos.FileMeta{Size: 3, Md5Sum: XYZ_MD5SUM}},
 	}
 	VerifyFileTests(indexer, fileTests, t)
 
-	var hashTests = []HashTest{
+	hashTests := []HashTest{
 		{ABC_MD5SUM, []string{"dir1/abc"}},
 		{XYZ_MD5SUM, []string{"dir2/xyz"}},
 		{XDONG_MD5SUM, nil},
@@ -270,7 +271,7 @@ func TestFileModified(t *testing.T) {
 	_ = ioutil.WriteFile(filepath.Join(dir, "dir1/abc"), []byte("xdong"), 0666)
 	indexer.Update()
 
-	var dirTests = []DirTest{
+	dirTests := []DirTest{
 		{"", protos.DirInfo{TotalFileSize: 13, TotalFileCount: 3}},
 		{"dir1", protos.DirInfo{TotalFileSize: 10, TotalFileCount: 2}},
 		{"dir1/dir11", protos.DirInfo{TotalFileSize: 5, TotalFileCount: 1}},
@@ -278,14 +279,14 @@ func TestFileModified(t *testing.T) {
 	}
 	VerifyDirTests(indexer, dirTests, t)
 
-	var fileTests = []FileTest{
+	fileTests := []FileTest{
 		{"dir1/abc", protos.FileMeta{Size: 5, Md5Sum: XDONG_MD5SUM}},
 		{"dir2/xyz", protos.FileMeta{Size: 3, Md5Sum: XYZ_MD5SUM}},
 		{"dir1/dir11/xdong", protos.FileMeta{Size: 5, Md5Sum: XDONG_MD5SUM}},
 	}
 	VerifyFileTests(indexer, fileTests, t)
 
-	var hashTests = []HashTest{
+	hashTests := []HashTest{
 		{ABC_MD5SUM, nil},
 		{XYZ_MD5SUM, []string{"dir2/xyz"}},
 		{XDONG_MD5SUM, []string{"dir1/dir11/xdong", "dir1/abc"}},
@@ -304,7 +305,7 @@ func TestFileAdded(t *testing.T) {
 	_ = ioutil.WriteFile(filepath.Join(dir, "dir1/xdong"), []byte("xdong"), 0666)
 	indexer.Update()
 
-	var dirTests = []DirTest{
+	dirTests := []DirTest{
 		{"", protos.DirInfo{TotalFileSize: 16, TotalFileCount: 4}},
 		{"dir1", protos.DirInfo{TotalFileSize: 13, TotalFileCount: 3}},
 		{"dir1/dir11", protos.DirInfo{TotalFileSize: 5, TotalFileCount: 1}},
@@ -312,7 +313,7 @@ func TestFileAdded(t *testing.T) {
 	}
 	VerifyDirTests(indexer, dirTests, t)
 
-	var fileTests = []FileTest{
+	fileTests := []FileTest{
 		{"dir1/abc", protos.FileMeta{Size: 3, Md5Sum: ABC_MD5SUM}},
 		{"dir1/xdong", protos.FileMeta{Size: 5, Md5Sum: XDONG_MD5SUM}},
 		{"dir2/xyz", protos.FileMeta{Size: 3, Md5Sum: XYZ_MD5SUM}},
@@ -320,7 +321,7 @@ func TestFileAdded(t *testing.T) {
 	}
 	VerifyFileTests(indexer, fileTests, t)
 
-	var hashTests = []HashTest{
+	hashTests := []HashTest{
 		{ABC_MD5SUM, []string{"dir1/abc"}},
 		{XYZ_MD5SUM, []string{"dir2/xyz"}},
 		{XDONG_MD5SUM, []string{"dir1/dir11/xdong", "dir1/xdong"}},
@@ -340,7 +341,7 @@ func TestDirAdded(t *testing.T) {
 	_ = ioutil.WriteFile(filepath.Join(dir, "dir1/dir12/abc"), []byte("abc"), 0666)
 	indexer.Update()
 
-	var dirTests = []DirTest{
+	dirTests := []DirTest{
 		{"", protos.DirInfo{TotalFileSize: 14, TotalFileCount: 4}},
 		{"dir1", protos.DirInfo{TotalFileSize: 11, TotalFileCount: 3}},
 		{"dir1/dir11", protos.DirInfo{TotalFileSize: 5, TotalFileCount: 1}},
@@ -349,7 +350,7 @@ func TestDirAdded(t *testing.T) {
 	}
 	VerifyDirTests(indexer, dirTests, t)
 
-	var fileTests = []FileTest{
+	fileTests := []FileTest{
 		{"dir1/abc", protos.FileMeta{Size: 3, Md5Sum: ABC_MD5SUM}},
 		{"dir2/xyz", protos.FileMeta{Size: 3, Md5Sum: XYZ_MD5SUM}},
 		{"dir1/dir11/xdong", protos.FileMeta{Size: 5, Md5Sum: XDONG_MD5SUM}},
@@ -357,10 +358,35 @@ func TestDirAdded(t *testing.T) {
 	}
 	VerifyFileTests(indexer, fileTests, t)
 
-	var hashTests = []HashTest{
+	hashTests := []HashTest{
 		{ABC_MD5SUM, []string{"dir1/abc", "dir1/dir12/abc"}},
 		{XYZ_MD5SUM, []string{"dir2/xyz"}},
 		{XDONG_MD5SUM, []string{"dir1/dir11/xdong"}},
 	}
 	VerifyHashTests(indexer, hashTests, t)
+}
+
+type DedupTest struct {
+	name     string
+	dupFiles []string
+	dirOrder []string
+	result   []string
+}
+
+func VerifyDedupTest(tests []DedupTest, t *testing.T) {
+	for _, ti := range tests {
+		actual := fileindexer.DedupFiles(ti.dupFiles, ti.dirOrder)
+		sort.Sort(sort.StringSlice(actual))
+		ExpectSliceEqual(t, ti.result, actual, ti.name)
+	}
+}
+
+func TestDedupFiles(t *testing.T) {
+	dupFiles := []string{"dir1/abc", "dir2/xyz", "dir1/ab"}
+	tests := []DedupTest{
+		{"EmptyDirOrder", dupFiles, []string{}, []string{"dir1/abc", "dir2/xyz"}},
+		{"NonExistDirOrder", dupFiles, []string{"dir3/"}, []string{"dir1/abc", "dir2/xyz"}},
+		{"DirOrder", dupFiles, []string{"dir2/"}, []string{"dir1/ab", "dir1/abc"}},
+	}
+	VerifyDedupTest(tests, t)
 }

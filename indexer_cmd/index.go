@@ -9,11 +9,19 @@ import (
 	"os"
 )
 
-var baseDir = flag.String("baseDir", "", "dir to build index for")
-var indexDir = flag.String("indexDir", "", "dir to store index. default to baseDir/fileIndexerDb if provided empty")
-var op = flag.String("op", "info", "operations defined as OP_*")
-var intersectDir = flag.String("intersectDir", "", "dir to check duplicated files")
-var intersectIndexDir = flag.String("intersectIndexDir", "", "index to check duplicated files")
+var (
+	baseDir           = flag.String("baseDir", "", "dir to build index for")
+	indexDir          = flag.String("indexDir", "", "dir to store index. default to baseDir/fileIndexerDb if provided empty")
+	op                = flag.String("op", "info", "operations defined as OP_*")
+	intersectDir      = flag.String("intersectDir", "", "dir to check duplicated files")
+	intersectIndexDir = flag.String("intersectIndexDir", "", "index to check duplicated files")
+	dryRun            = flag.Bool("dryRun", true, "Dry run or not when dedup.")
+	tmpDir            = flag.String("tmpDir", "", "tmp dir for removed files")
+	dedupDirOrderFile = flag.String("dirOrder", "",
+		"text files containing list of directories, which defines the priority of keeping files under these directories.")
+)
+
+var dirOrder = []string{}
 
 const (
 	OP_UPDATE         = "update"
@@ -82,9 +90,23 @@ func quickScan() {
 	fmt.Printf("Total File:%d, Total Size:%d\n", info.FileCount, info.FileSize)
 }
 
+func rmFileSafe(file string) {
+	if *dryRun {
+		fmt.Printf("rm %s\n", file)
+	} else {
+		fileindexer.RemoveFileSafely(file, *baseDir, *tmpDir)
+	}
+}
+
 func dedup() {
+	if *tmpDir == "" {
+		log.Fatal("tmpDir not specified")
+	}
 	count := 0
 	var size int64 = 0
+	if *dedupDirOrderFile != "" {
+		dirOrder = fileindexer.ReadLinesFromFile(*dedupDirOrderFile)
+	}
 	indexer.IterHash(func(hash string, fileSize int64, paths []string) {
 		if len(paths) > 1 {
 			fmt.Printf("hash:%s\n", hash)
@@ -93,9 +115,14 @@ func dedup() {
 			}
 			count += len(paths) - 1
 			size += int64(len(paths)-1) * fileSize
+			filesToRemove := fileindexer.DedupFiles(paths, dirOrder)
+			for _, file := range filesToRemove {
+				rmFileSafe(file)
+			}
 		}
 	})
-	fmt.Printf("Total: %d\n", count)
+	fmt.Printf("Total duplicated files: %d\n", count)
+	fmt.Printf("Total duplicated size: %d\n", size)
 }
 
 func intersectWith() {
